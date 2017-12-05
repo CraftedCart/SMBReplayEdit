@@ -61,7 +61,7 @@ class LoadReplay(bpy.types.Operator):
         #Rename the sphere
         for obj in bpy.context.selected_objects:
             obj.name = "SMBPlayerSphere"
-            
+
         #Keyframe the start position at frame -1
         context.scene.frame_set(-1)
         bpy.ops.anim.keyframe_insert_menu(type='Location')
@@ -87,7 +87,7 @@ class LoadReplay(bpy.types.Operator):
 
         print("Loaded replay")
         return {'FINISHED'}
-    
+
 #Operation
 class WriteReplay(bpy.types.Operator):
     bl_idname = "object.write_replay"
@@ -99,7 +99,7 @@ class WriteReplay(bpy.types.Operator):
     def execute(self, context):
         #Find SMBPlayerSphere
         ball = bpy.data.objects["SMBPlayerSphere"]
-        
+
         #Goto frame -1 and record the start positon
         context.scene.frame_set(-1)
         startPos = [
@@ -107,29 +107,29 @@ class WriteReplay(bpy.types.Operator):
             ball.location[2],
             -ball.location[0],
         ]
-        
+
         #List containing all frame delta positions
         ballDeltaPos = []
-        
+
         #Used so we can calculate the delta position
         prevPos = startPos
-        
+
         #Loop over all (3839) frames
         for i in range(0, 3839):
             context.scene.frame_set(i)
-            
+
             ballDeltaPos.append([
                 -(prevPos[0] - ball.location[1]),
                 -(prevPos[1] - ball.location[2]),
                 -(-prevPos[2] - ball.location[0])
             ])
-            
+
             prevPos = [
                     ball.location[1],
                     ball.location[2],
                     -ball.location[0]
                 ]
-            
+
         dict = {
             "comment": "Note - This JSON is NOT a valid replay! It provides snippets to splice into an existing replay",
             "header": {
@@ -141,7 +141,7 @@ class WriteReplay(bpy.types.Operator):
             }
 
         str = json.dumps(dict, indent = 2)
-        
+
         f = open(context.scene.target_json_prop, "w")
         f.write(str)
         f.close()
@@ -173,22 +173,22 @@ class SMBReplayEditPanel(bpy.types.Panel):
         layout.label("    So you can select frame -1 and modify")
         layout.label("    the starting keyframe")
         layout.label("The framerate will be set to 60 FPS")
-        
+
         layout.separator()
-        
+
         #Load from JSON
         layout.prop(scene, "source_json_prop")
         layout.operator(LoadReplay.bl_idname)
-        
+
         layout.separator()
 
         #Write to JSON
         layout.prop(scene, "target_json_prop")
         layout.operator(WriteReplay.bl_idname)
         layout.label("Will write frames 0 to 3839 (63.98s)")
-        
+
         layout.separator()
-        
+
         layout.label("The keyframe at -1 is where the start position is")
 
 def register():
@@ -210,7 +210,9 @@ def register():
     print("This add-on was activated")
 
 def unregister():
-    del bpy.types.Scene.float_input
+    del bpy.types.Scene.source_json_prop
+    del bpy.types.Scene.target_json_prop
+
     bpy.utils.unregister_module(__name__)
     print("This add-on was deactivated")
 
