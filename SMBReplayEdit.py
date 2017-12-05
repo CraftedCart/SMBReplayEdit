@@ -186,6 +186,7 @@ class SMBReplayEditPanel(bpy.types.Panel):
         layout.prop(scene, "target_json_prop")
         layout.operator(WriteReplay.bl_idname)
         layout.label("Will write frames 0 to 3839 (63.98s)")
+        layout.label("The ball should be named SMBPlayerSphere")
 
         layout.separator()
 
