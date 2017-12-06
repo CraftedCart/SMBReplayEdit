@@ -1,6 +1,7 @@
 import bpy
 import json
 import copy
+import math
 
 #Meta information
 bl_info = {
@@ -52,6 +53,7 @@ class LoadReplay(bpy.types.Operator):
         rpl = json.loads(jsonStr) #rpl = replay
 
         ballPosDeltas = rpl["root"]["playerPositionDelta"]
+        ballRots = rpl["root"]["playerTilt"]
         startPos = (
             -rpl["root"]["header"]["startPositionX"],
             rpl["root"]["header"]["startPositionZ"],
@@ -68,24 +70,53 @@ class LoadReplay(bpy.types.Operator):
         #Keyframe the start position at frame -1
         ball.keyframe_insert(data_path = "location", frame = -1)
 
-        #Loop over all frames, and add a keyframe
         #This could take a while - display a progress indicator
         bpy.context.window_manager.progress_begin(0, 100)
+        PROGRESS_SECTIONS = 2 #Number of overall steps to complete
+
+        ############ LOCATION
+
+        #Loop over all frames, and add a keyframe
         i = 0;
         for item in ballPosDeltas:
-            bpy.context.window_manager.progress_update(i / len(ballPosDeltas))
+            bpy.context.window_manager.progress_update(i / len(ballPosDeltas) / PROGRESS_SECTIONS)
 
             #Translate the mesh
             bpy.ops.transform.translate(
                 value = (
-                    -ballPosDeltas[i][0],
-                    ballPosDeltas[i][2],
-                    ballPosDeltas[i][1]
+                    -item[0],
+                    item[2],
+                    item[1]
                 )
             )
 
             #Keyframe the location
             ball.keyframe_insert(data_path = "location", frame = i)
+
+            i += 1;
+
+        ############ MONKEY ROTATION
+
+        #Add an empty to act as the player inside the ball
+        player = bpy.data.objects.new("SMBPlayerCharacter", None)
+        bpy.context.scene.objects.link(player)
+        player.empty_draw_type = "SINGLE_ARROW"
+        player.parent = ball
+
+        #Loop over all frames, and add a keyframe
+        i = 0;
+        for item in ballRots:
+            bpy.context.window_manager.progress_update(i / len(ballRots) / 2 + (1 / PROGRESS_SECTIONS))
+
+            #Translate the mesh
+            player.rotation_euler = [
+                    short_to_rad(-item[0]),
+                    short_to_rad(item[2]),
+                    short_to_rad(item[1])
+                ]
+
+            #Keyframe the location
+            player.keyframe_insert(data_path = "rotation_euler", frame = i)
 
             i += 1;
 
@@ -390,6 +421,11 @@ def unregister():
     bpy.utils.unregister_module(__name__)
     print("This add-on was deactivated")
 
+def short_to_rad(val):
+    val += 32767
+    val /= 65536.0 * math.pi * 2
+    val -= math.pi
+    return val
+
 if __name__ == "__main__":
     register()
-
