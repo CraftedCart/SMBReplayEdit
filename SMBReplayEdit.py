@@ -1,5 +1,6 @@
 import bpy
 import json
+import copy
 
 #Meta information
 bl_info = {
@@ -216,20 +217,143 @@ class SMBReplayEditPanel(bpy.types.Panel):
 
         #Load from JSON
         layout.prop(scene, "source_json_prop")
-        layout.operator(LoadReplay.bl_idname)
+        layout.operator(LoadReplay.bl_idname, icon = "IMPORT")
 
         layout.separator()
 
         #Write to JSON
         layout.prop(scene, "target_json_prop")
         layout.prop(scene, "modify_json_prop")
-        layout.operator(WriteReplay.bl_idname)
+        layout.operator(WriteReplay.bl_idname, icon = "EXPORT")
         layout.label("Will write frames 0 to 3839 (63.98s)")
         layout.label("The ball should be named SMBPlayerSphere")
 
         layout.separator()
 
         layout.label("The keyframe at -1 is where the start position is")
+    
+#Operation
+class ToFrame(bpy.types.Operator):
+    bl_idname = "object.to_frame"
+    bl_label = "Jump to frame"
+    bl_options = {'REGISTER', 'UNDO'}
+    
+    frame = bpy.props.IntProperty(name = "Frame")
+
+    #Execute function
+    def execute(self, context):
+        context.scene.frame_set(self.frame)
+        return {'FINISHED'}
+    
+#Operation
+class IncCurrentFrame(bpy.types.Operator):
+    bl_idname = "object.inc_current_frame"
+    bl_label = "Increment curent frame"
+    bl_description = "Moves the playback cursor"
+    bl_options = {'REGISTER', 'UNDO'}
+    
+    frames = bpy.props.IntProperty(name = "Frames")
+
+    #Execute function
+    def execute(self, context):
+        context.scene.frame_set(context.scene.frame_current + self.frames)
+        return {'FINISHED'}
+    
+#Operation
+class Accelerate(bpy.types.Operator):
+    bl_idname = "object.accelerate"
+    bl_label = "Accelerate and keyframe"
+    bl_description = "Moves the ball over time"
+    bl_options = {'REGISTER', 'UNDO'}
+    
+    frames = bpy.props.IntProperty(name = "Frames")
+
+    #Execute function
+    def execute(self, context):
+        #Find SMBPlayerSphere
+        ball = bpy.data.objects.get("SMBPlayerSphere")
+
+        #Check that an object named SMBPlayerSphere exists
+        if ball == None:
+            self.report({'ERROR'}, "Object SMBPlayerSphere does not exist\nCreate an object named that or load a replay (Which will create that object for you) before attempting to accelerate")
+        
+        #Get the velocity by comparing location between the 2 previous frames
+        context.scene.frame_set(context.scene.frame_current - 1)
+        currentLoc = copy.copy(ball.location)
+        context.scene.frame_set(context.scene.frame_current - 1)
+        prevLoc = copy.copy(ball.location)
+        velocity = [
+                currentLoc[0] - prevLoc[0],
+                currentLoc[1] - prevLoc[1],
+                currentLoc[2] - prevLoc[2]
+            ]
+            
+        #Move currentLoc
+        for i in range(0, self.frames):
+            velocity = [
+                    velocity[0] + context.scene.accel_prop[0],
+                    velocity[1] + context.scene.accel_prop[1],
+                    velocity[2] + context.scene.accel_prop[2],
+                ]
+            
+            currentLoc = [
+                    currentLoc[0] + velocity[0],
+                    currentLoc[1] + velocity[1],
+                    currentLoc[2] + velocity[2]
+                ]
+                
+            ball.location = currentLoc
+            ball.keyframe_insert(data_path = "location", frame = context.scene.frame_current + 2 + i)
+                
+        #Set the current frame for convenience
+        context.scene.frame_set(context.scene.frame_current + self.frames + 2)
+        
+        return {'FINISHED'}
+
+#The tools tool shelf panel
+class SMBReplayEditToolsPanel(bpy.types.Panel):
+    bl_label = "SMBReplayEdit Tools"
+    bl_idname = "smb_replay_edit_tools"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "TOOLS" #Put the menu on the left tool shelf
+    bl_category = "SMBReplayEdit" #Tab name of the tool shelf
+    bl_context = (("objectmode"))
+
+    #Menu and input
+    def draw(self, context):
+        obj = context.object
+        scene = context.scene
+
+        layout = self.layout
+        
+        layout.label("Timeline controls")
+
+        #Timeline convenience controls
+        row = layout.row(align=True)
+        row.alignment = 'EXPAND'
+        row.operator(ToFrame.bl_idname, icon = "REW", text = "To -1").frame = -1
+        row.operator(ToFrame.bl_idname, icon = "REW", text = "To 0").frame = 0
+        row.operator(ToFrame.bl_idname, icon = "FF", text = "To 3600").frame = 3600
+        
+        row = layout.row(align=True)
+        row.alignment = 'EXPAND'
+        #Icons took up too much space here
+        row.operator(IncCurrentFrame.bl_idname, text = "- 60").frames = -60
+        row.operator(IncCurrentFrame.bl_idname, text = "- 30").frames = -30
+        row.operator(IncCurrentFrame.bl_idname, text = "- 15").frames = -15
+        row.operator(IncCurrentFrame.bl_idname, text = "- 1").frames = -1
+        row.operator(IncCurrentFrame.bl_idname, text = "+ 1").frames = 1
+        row.operator(IncCurrentFrame.bl_idname, text = "+ 15").frames = 15
+        row.operator(IncCurrentFrame.bl_idname, text = "+ 30").frames = 30
+        row.operator(IncCurrentFrame.bl_idname, text = "+ 60").frames = 60
+        
+        layout.separator()
+
+        #Acceleration
+        layout.label("Acceleration")
+        layout.label("Default gravity acceleration is 0, 0, -0.0098")
+        layout.prop(scene, "accel_prop")
+        layout.operator(Accelerate.bl_idname).frames = 1
 
 def register():
     bpy.utils.register_module(__name__)
@@ -252,6 +376,13 @@ def register():
         description = "If checked, the sections in the source JSON file will be modified and saved to the target JSON file, rather than writing an incomplete JSON replay\nThe source file will not be overwritten",
         default = True
     )
+    
+    bpy.types.Scene.accel_prop = bpy.props.FloatVectorProperty(
+        name = "Acceleration",
+        description = "The acceleration value (In Blender space, so Z = up, etc.)",
+        default = [0, 0, -0.0098],
+        precision = 4
+    )
 
     print("This add-on was activated")
 
@@ -259,10 +390,10 @@ def unregister():
     del bpy.types.Scene.source_json_prop
     del bpy.types.Scene.target_json_prop
     del bpy.types.Scene.modify_json_prop
+    del bpy.types.Scene.accel_prop
 
     bpy.utils.unregister_module(__name__)
     print("This add-on was deactivated")
 
 if __name__ == "__main__":
     register()
-
