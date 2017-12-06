@@ -237,7 +237,7 @@ class SMBReplayEditPanel(bpy.types.Panel):
         layout.label("      the starting keyframe")
         layout.label("- The framerate will be set to 60 FPS")
         layout.label("- The start frame will be set to 0")
-        layout.label("- The end frame will be set to 3839 (40s inc. keyframe 0)")
+        layout.label("- The end frame will be set to 3839 (64s inc. keyframe 0)")
 
         layout.separator()
 
