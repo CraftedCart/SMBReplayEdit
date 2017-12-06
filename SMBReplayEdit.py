@@ -26,6 +26,8 @@ class SetupEnv(bpy.types.Operator):
     def execute(self, context):
         bpy.context.user_preferences.edit.use_negative_frames = True
         bpy.context.scene.render.fps = 60
+        bpy.context.scene.frame_start = 0
+        bpy.context.scene.frame_end = 3839
 
         print("Setup environment")
         return {'FINISHED'}
@@ -33,7 +35,7 @@ class SetupEnv(bpy.types.Operator):
 #Operation
 class LoadReplay(bpy.types.Operator):
     bl_idname = "object.load_replay"
-    bl_label = "Load replay from JSON"
+    bl_label = "Load replay from source JSON"
     bl_description = "Loads a replay from the source JSON file"
     bl_options = {'REGISTER', 'UNDO'}
 
@@ -67,8 +69,11 @@ class LoadReplay(bpy.types.Operator):
         bpy.ops.anim.keyframe_insert_menu(type='Location')
 
         #Loop over all frames, and add a keyframe
+        #This could take a while - display a progress indicator
+        bpy.context.window_manager.progress_begin(0, 100)
         i = 0;
         for item in ballPosDeltas:
+            bpy.context.window_manager.progress_update(i / len(ballPosDeltas))
             context.scene.frame_set(i)
 
             #Translate the mesh
@@ -85,20 +90,30 @@ class LoadReplay(bpy.types.Operator):
 
             i += 1;
 
+        bpy.context.window_manager.progress_end()
+
+        #Go back to frame 0 for convenience
+        context.scene.frame_set(0)
+
         print("Loaded replay")
         return {'FINISHED'}
 
 #Operation
 class WriteReplay(bpy.types.Operator):
     bl_idname = "object.write_replay"
-    bl_label = "Write replay to JSON"
+    bl_label = "Write replay to target JSON"
     bl_description = "Writes a replay to the target JSON file"
     bl_options = {'REGISTER', 'UNDO'}
 
     #Execute function
     def execute(self, context):
         #Find SMBPlayerSphere
-        ball = bpy.data.objects["SMBPlayerSphere"]
+        ball = bpy.data.objects.get("SMBPlayerSphere")
+
+        #Check that an object named SMBPlayerSphere exists
+        if ball == None:
+            self.report({'ERROR'}, "Object SMBPlayerSphere does not exist\nCreate an object named that or load a replay (Which will create that object for you) before attempting to write a replay")
+            return {'CANCELLED'}
 
         #Goto frame -1 and record the start positon
         context.scene.frame_set(-1)
@@ -115,7 +130,10 @@ class WriteReplay(bpy.types.Operator):
         prevPos = startPos
 
         #Loop over all (3839) frames
+        #This could take a while - display a progress indicator
+        bpy.context.window_manager.progress_begin(0, 100)
         for i in range(0, 3839):
+            bpy.context.window_manager.progress_update(i / 3839)
             context.scene.frame_set(i)
 
             ballDeltaPos.append([
@@ -130,15 +148,33 @@ class WriteReplay(bpy.types.Operator):
                     -ball.location[0]
                 ]
 
-        dict = {
-            "comment": "Note - This JSON is NOT a valid replay! It provides snippets to splice into an existing replay",
-            "header": {
-                    "startPositionX": startPos[0],
-                    "startPositionY": startPos[1],
-                    "startPositionZ": startPos[2]
-                },
-            "playerPositionDelta": ballDeltaPos
-            }
+        bpy.context.window_manager.progress_end()
+
+        dict = None #Output dict
+
+        if context.scene.modify_json_prop:
+            #Modify the source JSON
+            f = open(context.scene.source_json_prop, "r")
+            jsonStr = f.read()
+            f.close()
+            dict = json.loads(jsonStr)
+
+            #Modify it
+            dict["root"]["header"]["startPositionX"] = startPos[0]
+            dict["root"]["header"]["startPositionY"] = startPos[1]
+            dict["root"]["header"]["startPositionZ"] = startPos[2]
+            dict["root"]["playerPositionDelta"] = ballDeltaPos
+        else:
+            #Don't modify the source JSON
+            dict = {
+                "comment": "Note - This JSON is NOT a valid replay! It provides snippets to splice into an existing replay",
+                "header": {
+                        "startPositionX": startPos[0],
+                        "startPositionY": startPos[1],
+                        "startPositionZ": startPos[2]
+                    },
+                "playerPositionDelta": ballDeltaPos
+                }
 
         str = json.dumps(dict, indent = 2)
 
@@ -169,10 +205,12 @@ class SMBReplayEditPanel(bpy.types.Panel):
         layout.operator(SetupEnv.bl_idname)
         layout.label("Setup environment will tweak Blender")
         layout.label("    to make it easier to work with replays")
-        layout.label("Use negative frames will be enabled")
-        layout.label("    So you can select frame -1 and modify")
-        layout.label("    the starting keyframe")
-        layout.label("The framerate will be set to 60 FPS")
+        layout.label("- Use negative frames will be enabled")
+        layout.label("    - So you can select frame -1 and modify")
+        layout.label("      the starting keyframe")
+        layout.label("- The framerate will be set to 60 FPS")
+        layout.label("- The start frame will be set to 0")
+        layout.label("- The end frame will be set to 3839 (63.98s)")
 
         layout.separator()
 
@@ -184,6 +222,7 @@ class SMBReplayEditPanel(bpy.types.Panel):
 
         #Write to JSON
         layout.prop(scene, "target_json_prop")
+        layout.prop(scene, "modify_json_prop")
         layout.operator(WriteReplay.bl_idname)
         layout.label("Will write frames 0 to 3839 (63.98s)")
         layout.label("The ball should be named SMBPlayerSphere")
@@ -208,14 +247,22 @@ def register():
         subtype = 'FILE_PATH'
     )
 
+    bpy.types.Scene.modify_json_prop = bpy.props.BoolProperty(
+        name = "Modify existing replay",
+        description = "If checked, the sections in the source JSON file will be modified and saved to the target JSON file, rather than writing an incomplete JSON replay\nThe source file will not be overwritten",
+        default = True
+    )
+
     print("This add-on was activated")
 
 def unregister():
     del bpy.types.Scene.source_json_prop
     del bpy.types.Scene.target_json_prop
+    del bpy.types.Scene.modify_json_prop
 
     bpy.utils.unregister_module(__name__)
     print("This add-on was deactivated")
 
 if __name__ == "__main__":
     register()
+
