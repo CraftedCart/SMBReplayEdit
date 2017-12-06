@@ -60,14 +60,13 @@ class LoadReplay(bpy.types.Operator):
 
         #Add a sphere to act as the ball (Size = radius)
         bpy.ops.mesh.primitive_uv_sphere_add(location = startPos, size = 0.5)
+        ball = bpy.context.active_object
 
         #Rename the sphere
-        for obj in bpy.context.selected_objects:
-            obj.name = "SMBPlayerSphere"
+        ball.name = "SMBPlayerSphere"
 
         #Keyframe the start position at frame -1
-        context.scene.frame_set(-1)
-        bpy.ops.anim.keyframe_insert_menu(type='Location')
+        ball.keyframe_insert(data_path = "location", frame = -1)
 
         #Loop over all frames, and add a keyframe
         #This could take a while - display a progress indicator
@@ -75,7 +74,6 @@ class LoadReplay(bpy.types.Operator):
         i = 0;
         for item in ballPosDeltas:
             bpy.context.window_manager.progress_update(i / len(ballPosDeltas))
-            context.scene.frame_set(i)
 
             #Translate the mesh
             bpy.ops.transform.translate(
@@ -87,14 +85,11 @@ class LoadReplay(bpy.types.Operator):
             )
 
             #Keyframe the location
-            bpy.ops.anim.keyframe_insert_menu(type='Location')
+            ball.keyframe_insert(data_path = "location", frame = i)
 
             i += 1;
 
         bpy.context.window_manager.progress_end()
-
-        #Go back to frame 0 for convenience
-        context.scene.frame_set(0)
 
         print("Loaded replay")
         return {'FINISHED'}
@@ -231,41 +226,41 @@ class SMBReplayEditPanel(bpy.types.Panel):
         layout.separator()
 
         layout.label("The keyframe at -1 is where the start position is")
-    
+
 #Operation
 class ToFrame(bpy.types.Operator):
     bl_idname = "object.to_frame"
     bl_label = "Jump to frame"
     bl_options = {'REGISTER', 'UNDO'}
-    
+
     frame = bpy.props.IntProperty(name = "Frame")
 
     #Execute function
     def execute(self, context):
         context.scene.frame_set(self.frame)
         return {'FINISHED'}
-    
+
 #Operation
 class IncCurrentFrame(bpy.types.Operator):
     bl_idname = "object.inc_current_frame"
     bl_label = "Increment curent frame"
     bl_description = "Moves the playback cursor"
     bl_options = {'REGISTER', 'UNDO'}
-    
+
     frames = bpy.props.IntProperty(name = "Frames")
 
     #Execute function
     def execute(self, context):
         context.scene.frame_set(context.scene.frame_current + self.frames)
         return {'FINISHED'}
-    
+
 #Operation
 class Accelerate(bpy.types.Operator):
     bl_idname = "object.accelerate"
     bl_label = "Accelerate and keyframe"
     bl_description = "Moves the ball over time"
     bl_options = {'REGISTER', 'UNDO'}
-    
+
     frames = bpy.props.IntProperty(name = "Frames")
 
     #Execute function
@@ -276,7 +271,7 @@ class Accelerate(bpy.types.Operator):
         #Check that an object named SMBPlayerSphere exists
         if ball == None:
             self.report({'ERROR'}, "Object SMBPlayerSphere does not exist\nCreate an object named that or load a replay (Which will create that object for you) before attempting to accelerate")
-        
+
         #Get the velocity by comparing location between the 2 previous frames
         context.scene.frame_set(context.scene.frame_current - 1)
         currentLoc = copy.copy(ball.location)
@@ -287,7 +282,7 @@ class Accelerate(bpy.types.Operator):
                 currentLoc[1] - prevLoc[1],
                 currentLoc[2] - prevLoc[2]
             ]
-            
+
         #Move currentLoc
         for i in range(0, self.frames):
             velocity = [
@@ -295,19 +290,19 @@ class Accelerate(bpy.types.Operator):
                     velocity[1] + context.scene.accel_prop[1],
                     velocity[2] + context.scene.accel_prop[2],
                 ]
-            
+
             currentLoc = [
                     currentLoc[0] + velocity[0],
                     currentLoc[1] + velocity[1],
                     currentLoc[2] + velocity[2]
                 ]
-                
+
             ball.location = currentLoc
             ball.keyframe_insert(data_path = "location", frame = context.scene.frame_current + 2 + i)
-                
+
         #Set the current frame for convenience
         context.scene.frame_set(context.scene.frame_current + self.frames + 2)
-        
+
         return {'FINISHED'}
 
 #The tools tool shelf panel
@@ -325,7 +320,7 @@ class SMBReplayEditToolsPanel(bpy.types.Panel):
         scene = context.scene
 
         layout = self.layout
-        
+
         layout.label("Timeline controls")
 
         #Timeline convenience controls
@@ -334,7 +329,7 @@ class SMBReplayEditToolsPanel(bpy.types.Panel):
         row.operator(ToFrame.bl_idname, icon = "REW", text = "To -1").frame = -1
         row.operator(ToFrame.bl_idname, icon = "REW", text = "To 0").frame = 0
         row.operator(ToFrame.bl_idname, icon = "FF", text = "To 3600").frame = 3600
-        
+
         row = layout.row(align=True)
         row.alignment = 'EXPAND'
         #Icons took up too much space here
@@ -346,7 +341,7 @@ class SMBReplayEditToolsPanel(bpy.types.Panel):
         row.operator(IncCurrentFrame.bl_idname, text = "+ 15").frames = 15
         row.operator(IncCurrentFrame.bl_idname, text = "+ 30").frames = 30
         row.operator(IncCurrentFrame.bl_idname, text = "+ 60").frames = 60
-        
+
         layout.separator()
 
         #Acceleration
@@ -376,7 +371,7 @@ def register():
         description = "If checked, the sections in the source JSON file will be modified and saved to the target JSON file, rather than writing an incomplete JSON replay\nThe source file will not be overwritten",
         default = True
     )
-    
+
     bpy.types.Scene.accel_prop = bpy.props.FloatVectorProperty(
         name = "Acceleration",
         description = "The acceleration value (In Blender space, so Z = up, etc.)",
@@ -397,3 +392,4 @@ def unregister():
 
 if __name__ == "__main__":
     register()
+
