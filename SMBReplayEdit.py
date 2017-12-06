@@ -145,9 +145,9 @@ class WriteReplay(bpy.types.Operator):
         #Goto frame -1 and record the start positon
         context.scene.frame_set(-1)
         startPos = [
-            ball.location[1],
-            ball.location[2],
             -ball.location[0],
+            ball.location[2],
+            ball.location[1],
         ]
 
         #List containing all frame delta positions
@@ -156,23 +156,23 @@ class WriteReplay(bpy.types.Operator):
         #Used so we can calculate the delta position
         prevPos = startPos
 
-        #Loop over all (3839) frames
+        #Loop over all (3840) frames
         #This could take a while - display a progress indicator
         bpy.context.window_manager.progress_begin(0, 100)
-        for i in range(0, 3839):
-            bpy.context.window_manager.progress_update(i / 3839)
+        for i in range(0, 3840):
+            bpy.context.window_manager.progress_update(i / 3840)
             context.scene.frame_set(i)
 
             ballDeltaPos.append([
-                -(prevPos[0] - ball.location[1]),
+                -(prevPos[0] - -ball.location[0]),
                 -(prevPos[1] - ball.location[2]),
-                -(-prevPos[2] - ball.location[0])
+                -(prevPos[2] - ball.location[1])
             ])
 
             prevPos = [
-                    ball.location[1],
+                    -ball.location[0],
                     ball.location[2],
-                    -ball.location[0]
+                    ball.location[1]
                 ]
 
         bpy.context.window_manager.progress_end()
@@ -237,7 +237,7 @@ class SMBReplayEditPanel(bpy.types.Panel):
         layout.label("      the starting keyframe")
         layout.label("- The framerate will be set to 60 FPS")
         layout.label("- The start frame will be set to 0")
-        layout.label("- The end frame will be set to 3839 (63.98s)")
+        layout.label("- The end frame will be set to 3839 (40s inc. keyframe 0)")
 
         layout.separator()
 
@@ -251,7 +251,7 @@ class SMBReplayEditPanel(bpy.types.Panel):
         layout.prop(scene, "target_json_prop")
         layout.prop(scene, "modify_json_prop")
         layout.operator(WriteReplay.bl_idname, icon = "EXPORT")
-        layout.label("Will write frames 0 to 3839 (63.98s)")
+        layout.label("Will write frames 0 to 3839 (64s)")
         layout.label("The ball should be named SMBPlayerSphere")
 
         layout.separator()
