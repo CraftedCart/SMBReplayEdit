@@ -95,10 +95,10 @@ class LoadReplay(bpy.types.Operator):
 
             i += 1;
 
-        ############ MONKEY ROTATION
+        ############ BALL ROTATION
 
-        #Add an empty to act as the player inside the ball
-        player = bpy.data.objects.new("SMBPlayerCharacter", None)
+        #Add an empty as a rotation indicator (Not really necessary, but could be useful)
+        player = bpy.data.objects.new("SMBPlayerRotIndicator", None)
         bpy.context.scene.objects.link(player)
         player.empty_draw_type = "SINGLE_ARROW"
         player.parent = ball
@@ -109,14 +109,14 @@ class LoadReplay(bpy.types.Operator):
             bpy.context.window_manager.progress_update(i / len(ballRots) / 2 + (1 / PROGRESS_SECTIONS))
 
             #Translate the mesh
-            player.rotation_euler = [
-                    short_to_rad(-item[0]),
-                    short_to_rad(item[2]),
-                    short_to_rad(item[1])
+            ball.rotation_euler = [
+                    math.radians(item[0]),
+                    math.radians(-item[2]),
+                    math.radians(item[1])
                 ]
 
             #Keyframe the location
-            player.keyframe_insert(data_path = "rotation_euler", frame = i)
+            ball.keyframe_insert(data_path = "rotation_euler", frame = i)
 
             i += 1;
 
@@ -145,8 +145,8 @@ class WriteReplay(bpy.types.Operator):
         #Goto frame -1 and record the start positon
         context.scene.frame_set(-1)
         startPos = [
-            ball.location[0],
-            -ball.location[2],
+            -ball.location[0],
+            ball.location[2],
             ball.location[1],
         ]
 
@@ -164,14 +164,14 @@ class WriteReplay(bpy.types.Operator):
             context.scene.frame_set(i)
 
             ballDeltaPos.append([
-                -(prevPos[0] - ball.location[0]),
-                -(prevPos[1] - -ball.location[2]),
+                -(prevPos[0] - -ball.location[0]),
+                -(prevPos[1] - ball.location[2]),
                 -(prevPos[2] - ball.location[1])
             ])
 
             prevPos = [
-                    ball.location[0],
-                    -ball.location[2],
+                    -ball.location[0],
+                    ball.location[2],
                     ball.location[1]
                 ]
 
@@ -237,7 +237,7 @@ class SMBReplayEditPanel(bpy.types.Panel):
         layout.label("      the starting keyframe")
         layout.label("- The framerate will be set to 60 FPS")
         layout.label("- The start frame will be set to 0")
-        layout.label("- The end frame will be set to 3839 (64s inc. keyframe 0)")
+        layout.label("- The end frame will be set to 3839 (40s inc. keyframe 0)")
 
         layout.separator()
 
@@ -421,11 +421,11 @@ def unregister():
     bpy.utils.unregister_module(__name__)
     print("This add-on was deactivated")
 
-def short_to_rad(val):
-    val += 32767
-    val /= 65536.0 * math.pi * 2
-    val -= math.pi
-    return val
+#def short_to_rad(val):
+#    val += 32767
+#    val /= 65536.0 * math.pi * 2
+#    val -= math.pi
+#    return val
 
 if __name__ == "__main__":
     register()
