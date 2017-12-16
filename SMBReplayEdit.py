@@ -55,8 +55,8 @@ class LoadReplay(bpy.types.Operator):
         ballPosDeltas = rpl["root"]["playerPositionDelta"]
         ballRots = rpl["root"]["playerTilt"]
         startPos = (
-            -rpl["root"]["header"]["startPositionX"],
-            rpl["root"]["header"]["startPositionZ"],
+            rpl["root"]["header"]["startPositionX"],
+            -rpl["root"]["header"]["startPositionZ"],
             rpl["root"]["header"]["startPositionY"],
         )
 
@@ -84,8 +84,8 @@ class LoadReplay(bpy.types.Operator):
             #Translate the mesh
             bpy.ops.transform.translate(
                 value = (
-                    -item[0],
-                    item[2],
+                    item[0],
+                    -item[2],
                     item[1]
                 )
             )
@@ -145,8 +145,8 @@ class WriteReplay(bpy.types.Operator):
         #Goto frame -1 and record the start positon
         context.scene.frame_set(-1)
         startPos = [
-            -ball.location[0],
-            ball.location[2],
+            ball.location[0],
+            -ball.location[2],
             ball.location[1],
         ]
 
@@ -164,14 +164,14 @@ class WriteReplay(bpy.types.Operator):
             context.scene.frame_set(i)
 
             ballDeltaPos.append([
-                -(prevPos[0] - -ball.location[0]),
-                -(prevPos[1] - ball.location[2]),
+                -(prevPos[0] - ball.location[0]),
+                -(prevPos[1] - -ball.location[2]),
                 -(prevPos[2] - ball.location[1])
             ])
 
             prevPos = [
-                    -ball.location[0],
-                    ball.location[2],
+                    ball.location[0],
+                    -ball.location[2],
                     ball.location[1]
                 ]
 
@@ -429,3 +429,4 @@ def short_to_rad(val):
 
 if __name__ == "__main__":
     register()
+
