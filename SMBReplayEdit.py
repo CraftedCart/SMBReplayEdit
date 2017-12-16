@@ -146,12 +146,14 @@ class WriteReplay(bpy.types.Operator):
         context.scene.frame_set(-1)
         startPos = [
             ball.location[0],
-            -ball.location[2],
-            ball.location[1],
+            ball.location[2],
+            -ball.location[1],
         ]
 
         #List containing all frame delta positions
         ballDeltaPos = []
+        #ballRots is absolute rot, not deltas - is in degrees
+        ballRots = []
 
         #Used so we can calculate the delta position
         prevPos = startPos
@@ -165,14 +167,20 @@ class WriteReplay(bpy.types.Operator):
 
             ballDeltaPos.append([
                 -(prevPos[0] - ball.location[0]),
-                -(prevPos[1] - -ball.location[2]),
-                -(prevPos[2] - ball.location[1])
+                -(prevPos[1] - ball.location[2]),
+                -(prevPos[2] - -ball.location[1])
+            ])
+            
+            ballRots.append([
+                math.degrees(ball.rotation_euler[0]),
+                math.degrees(ball.rotation_euler[2]),
+                -math.degrees(ball.rotation_euler[1]),
             ])
 
             prevPos = [
                     ball.location[0],
-                    -ball.location[2],
-                    ball.location[1]
+                    ball.location[2],
+                    -ball.location[1]
                 ]
 
         bpy.context.window_manager.progress_end()
@@ -191,6 +199,7 @@ class WriteReplay(bpy.types.Operator):
             dict["root"]["header"]["startPositionY"] = startPos[1]
             dict["root"]["header"]["startPositionZ"] = startPos[2]
             dict["root"]["playerPositionDelta"] = ballDeltaPos
+            dict["root"]["playerTilt"] = ballRots
         else:
             #Don't modify the source JSON
             dict = {
@@ -200,7 +209,8 @@ class WriteReplay(bpy.types.Operator):
                         "startPositionY": startPos[1],
                         "startPositionZ": startPos[2]
                     },
-                "playerPositionDelta": ballDeltaPos
+                "playerPositionDelta": ballDeltaPos,
+                "playerTilt": ballRots
                 }
 
         str = json.dumps(dict, indent = 2)
