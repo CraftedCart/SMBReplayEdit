@@ -145,8 +145,8 @@ class WriteReplay(bpy.types.Operator):
         #Goto frame -1 and record the start positon
         context.scene.frame_set(-1)
         startPos = [
-            -ball.location[0],
-            ball.location[2],
+            ball.location[0],
+            -ball.location[2],
             ball.location[1],
         ]
 
@@ -164,14 +164,14 @@ class WriteReplay(bpy.types.Operator):
             context.scene.frame_set(i)
 
             ballDeltaPos.append([
-                -(prevPos[0] - -ball.location[0]),
-                -(prevPos[1] - ball.location[2]),
+                -(prevPos[0] - ball.location[0]),
+                -(prevPos[1] - -ball.location[2]),
                 -(prevPos[2] - ball.location[1])
             ])
 
             prevPos = [
-                    -ball.location[0],
-                    ball.location[2],
+                    ball.location[0],
+                    -ball.location[2],
                     ball.location[1]
                 ]
 
