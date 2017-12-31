@@ -54,6 +54,7 @@ class LoadReplay(bpy.types.Operator):
 
         ballPosDeltas = rpl["root"]["playerPositionDelta"]
         ballRots = rpl["root"]["playerTilt"]
+        stageRots = rpl["root"]["stageTilt"]
         startPos = (
             rpl["root"]["header"]["startPositionX"],
             -rpl["root"]["header"]["startPositionZ"],
@@ -61,18 +62,24 @@ class LoadReplay(bpy.types.Operator):
         )
 
         #Add a sphere to act as the ball (Size = radius)
-        bpy.ops.mesh.primitive_uv_sphere_add(location = startPos, size = 0.5)
+        bpy.ops.mesh.primitive_uv_sphere_add(location = [0.0, 0.0, 0.0], size = 0.5)
         ball = bpy.context.active_object
 
         #Rename the sphere
         ball.name = "SMBPlayerSphere"
 
-        #Keyframe the start position at frame -1
-        ball.keyframe_insert(data_path = "location", frame = -1)
-
         #This could take a while - display a progress indicator
         bpy.context.window_manager.progress_begin(0, 100)
-        PROGRESS_SECTIONS = 2 #Number of overall steps to complete
+        PROGRESS_SECTIONS = 3 #Number of overall steps to complete
+
+        ballPosEmpty = bpy.data.objects.new("SMBPlayerBallPos", None)
+        bpy.context.scene.objects.link(ballPosEmpty)
+        ballPosEmpty.location = startPos
+        
+        #Keyframe the start position at frame -1
+        ballPosEmpty.keyframe_insert(data_path = "location", frame = -1)
+
+        ball.parent = ballPosEmpty
 
         ############ LOCATION
 
@@ -82,16 +89,14 @@ class LoadReplay(bpy.types.Operator):
             bpy.context.window_manager.progress_update(i / len(ballPosDeltas) / PROGRESS_SECTIONS)
 
             #Translate the mesh
-            bpy.ops.transform.translate(
-                value = (
-                    item[0],
-                    -item[2],
-                    item[1]
-                )
-            )
+            ballPosEmpty.location = [
+                    ballPosEmpty.location[0] + item[0],
+                    ballPosEmpty.location[1] + -item[2],
+                    ballPosEmpty.location[2] + item[1]
+                ]
 
             #Keyframe the location
-            ball.keyframe_insert(data_path = "location", frame = i)
+            ballPosEmpty.keyframe_insert(data_path = "location", frame = i)
 
             i += 1;
 
@@ -119,6 +124,38 @@ class LoadReplay(bpy.types.Operator):
             ball.keyframe_insert(data_path = "rotation_euler", frame = i)
 
             i += 1;
+            
+        ############ STAGE ROTATION
+
+        #Add an plane for stage tilt
+        bpy.ops.mesh.primitive_plane_add(location = [0.0, 0.0, 0.0])
+        tiltPlane = bpy.context.active_object
+        
+        #Set the origin point
+        for vert in tiltPlane.data.vertices:
+            vert.co[2] -= 0.5
+
+        #Rename the plane
+        tiltPlane.name = "SMBStageTilt"
+
+        tiltPlane.parent = ballPosEmpty
+
+        #Loop over all frames, and add a keyframe
+        i = 0;
+        for item in stageRots:
+            bpy.context.window_manager.progress_update(i / len(stageRots) / 2 + (1 / PROGRESS_SECTIONS))
+
+            #Translate the mesh
+            tiltPlane.rotation_euler = [
+                    math.radians(item[0]),
+                    math.radians(-item[1]),
+                    0.0
+                ]
+
+            #Keyframe the location
+            tiltPlane.keyframe_insert(data_path = "rotation_euler", frame = i)
+
+            i += 1;
 
         bpy.context.window_manager.progress_end()
 
@@ -135,25 +172,35 @@ class WriteReplay(bpy.types.Operator):
     #Execute function
     def execute(self, context):
         #Find SMBPlayerSphere
+        ballPosEmpty = bpy.data.objects.get("SMBPlayerBallPos") 
         ball = bpy.data.objects.get("SMBPlayerSphere")
+        stageTilt = bpy.data.objects.get("SMBStageTilt")
 
-        #Check that an object named SMBPlayerSphere exists
+        #Check that the objects exist
+        if ballPosEmpty == None:
+            self.report({'ERROR'}, "Object SMBPlayerBallPos does not exist\nCreate an object named that or load a replay (Which will create that object for you) before attempting to write a replay")
+            return {'CANCELLED'}
         if ball == None:
             self.report({'ERROR'}, "Object SMBPlayerSphere does not exist\nCreate an object named that or load a replay (Which will create that object for you) before attempting to write a replay")
+            return {'CANCELLED'}
+        if stageTilt == None:
+            self.report({'ERROR'}, "Object SMBStageTilt does not exist\nCreate an object named that or load a replay (Which will create that object for you) before attempting to write a replay")
             return {'CANCELLED'}
 
         #Goto frame -1 and record the start positon
         context.scene.frame_set(-1)
         startPos = [
-            ball.location[0],
-            ball.location[2],
-            -ball.location[1],
+            ballPosEmpty.location[0],
+            ballPosEmpty.location[2],
+            -ballPosEmpty.location[1],
         ]
 
         #List containing all frame delta positions
         ballDeltaPos = []
         #ballRots is absolute rot, not deltas - is in degrees
         ballRots = []
+        #stageRots is also absolute rot
+        stageRots = []
 
         #Used so we can calculate the delta position
         prevPos = startPos
@@ -166,9 +213,9 @@ class WriteReplay(bpy.types.Operator):
             context.scene.frame_set(i)
 
             ballDeltaPos.append([
-                -(prevPos[0] - ball.location[0]),
-                -(prevPos[1] - ball.location[2]),
-                -(prevPos[2] - -ball.location[1])
+                -(prevPos[0] - ballPosEmpty.location[0]),
+                -(prevPos[1] - ballPosEmpty.location[2]),
+                -(prevPos[2] - -ballPosEmpty.location[1])
             ])
             
             ballRots.append([
@@ -176,11 +223,16 @@ class WriteReplay(bpy.types.Operator):
                 math.degrees(ball.rotation_euler[2]),
                 -math.degrees(ball.rotation_euler[1]),
             ])
+            
+            stageRots.append([
+                math.degrees(stageTilt.rotation_euler[0]),
+                -math.degrees(stageTilt.rotation_euler[1]),
+            ])
 
             prevPos = [
-                    ball.location[0],
-                    ball.location[2],
-                    -ball.location[1]
+                    ballPosEmpty.location[0],
+                    ballPosEmpty.location[2],
+                    -ballPosEmpty.location[1]
                 ]
 
         bpy.context.window_manager.progress_end()
@@ -200,6 +252,8 @@ class WriteReplay(bpy.types.Operator):
             dict["root"]["header"]["startPositionZ"] = startPos[2]
             dict["root"]["playerPositionDelta"] = ballDeltaPos
             dict["root"]["playerTilt"] = ballRots
+            dict["root"]["stageTilt"] = stageRots
+            
         else:
             #Don't modify the source JSON
             dict = {
@@ -210,7 +264,8 @@ class WriteReplay(bpy.types.Operator):
                         "startPositionZ": startPos[2]
                     },
                 "playerPositionDelta": ballDeltaPos,
-                "playerTilt": ballRots
+                "playerTilt": ballRots,
+                "stageTilt": stageRots
                 }
 
         str = json.dumps(dict, indent = 2)
